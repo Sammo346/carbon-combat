@@ -83,8 +83,6 @@ protected:
 
 	virtual void AttackLunge();
 
-	void OnWeaponBeginOverlap(UPrimitiveComponent * OverlappedComp, AActor * OtherActor, UPrimitiveComponent * OtherComp, int32 OtherBodyIndex, bool bFromSweep, const FHitResult & SweepResult);
-
 	bool Interruptable;
 
 public:	
@@ -96,6 +94,7 @@ public:
 
 	void FocusTarget();
 
-	
+	/** Returns Weapon subobject **/
+	FORCEINLINE class UStaticMeshComponent* GetWeapon() const { return Weapon; }
 	
 };

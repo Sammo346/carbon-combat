@@ -123,8 +123,6 @@ void ACarbonCharacter::BeginPlay()
 	// Sphere
 	SphereCollider->OnComponentBeginOverlap.AddDynamic(this, &ACarbonCharacter::OnSphereBeginOverlap);
 	SphereCollider->OnComponentEndOverlap.AddDynamic(this, &ACarbonCharacter::OnSphereEndOverlap);
-	// Weapon
-	Weapon->OnComponentBeginOverlap.AddDynamic(this, &ACarbonCharacter::OnWeaponBeginOverlap);
 
 	// Add any nearby enemies to NearbyEnemies array
 	TSet<AActor*> NearActors;
@@ -144,11 +142,48 @@ void ACarbonCharacter::Tick(float DeltaTime)
 	// Check if target (if any) is still valid,
 	FocusTarget();
 
-
+	// ROLLING
 	if (Rolling)
 	{
+		// Move forward
 		AddMovementInput(GetActorForwardVector(), 600 * GetWorld()->GetDeltaSeconds());
-		//RollRotateSmooth();
+	}
+	// STUMBLING
+	else if (Stumbling && MovingBackwards)
+	{
+		// Move Backwards
+		AddMovementInput(-GetActorForwardVector(), 40.0f * GetWorld()->GetDeltaSeconds());
+	}
+	// ATTACKING
+	else if (Attacking && AttackDamaging)
+	{
+		// Loop through weapon contacts and apply damage to them
+
+		TSet<AActor*> OverlappingActors;
+		Weapon->GetOverlappingActors(OverlappingActors);
+
+		for (AActor* OtherActor : OverlappingActors)
+		{
+			if (OtherActor == this)
+				continue;
+
+			// Don't hit same enemy multiple times within one attack
+			if (!AttackHitActors.Contains(OtherActor))
+			{
+				// Apply damage
+				float AppliedDamage = UGameplayStatics::ApplyDamage(OtherActor, 1.0f, GetController(), this, UDamageType::StaticClass());
+
+				// Check damage was successfull (not invalid or blocked)
+				if (AppliedDamage > 0.0f)
+				{
+					AttackHitActors.Add(OtherActor);
+
+					// Shake camera on successful hit
+					UCameraShake * CameraShake = UCameraShake::StaticClass()->GetDefaultObject<UCameraShake>();
+					GetWorld()->GetFirstPlayerController()->PlayerCameraManager->PlayCameraShake(CameraShakeMinor);
+				}
+			}
+		}
 	}
 
 	//* Camera auto-adjustment */
@@ -166,11 +201,12 @@ void ACarbonCharacter::Tick(float DeltaTime)
 	//* Camera focus */
 	if (Target != NULL && TargetLocked)
 	{
+		// Check if distance to target within x
 		FVector TargetDirection = Target->GetActorLocation() - GetActorLocation();
 		if (TargetDirection.Size2D() > 400)
 		{
+			// Rotate towards target within y degrees
 			FRotator Difference = UKismetMathLibrary::NormalizedDeltaRotator(Controller->GetControlRotation(), TargetDirection.ToOrientationRotator());
-
 			if (FMath::Abs(Difference.Yaw) > 30.0f)
 				AddControllerYawInput(DeltaTime * -Difference.Yaw * 0.5f);
 		}			
@@ -206,7 +242,7 @@ void ACarbonCharacter::LookUpAtRate(float Rate)
 
 void ACarbonCharacter::MoveForward(float Value)
 {
-	if ((Controller != NULL) && (Value != 0.0f) && !Attacking && !Rolling)
+	if ((Controller != NULL) && (Value != 0.0f) && !Attacking && !Rolling && !Stumbling)
 	{
 		// find out which way is forward
 		const FRotator Rotation = Controller->GetControlRotation();
@@ -222,7 +258,7 @@ void ACarbonCharacter::MoveForward(float Value)
 
 void ACarbonCharacter::MoveRight(float Value)
 {
-	if ( (Controller != NULL) && (Value != 0.0f) && !Attacking && !Rolling)
+	if ( (Controller != NULL) && (Value != 0.0f) && !Attacking && !Rolling && !Stumbling)
 	{
 		// find out which way is right
 		const FRotator Rotation = Controller->GetControlRotation();
@@ -239,7 +275,7 @@ void ACarbonCharacter::MoveRight(float Value)
 
 void ACarbonCharacter::Attack()
 {
-	if ((!Attacking || NextAttackReady) && !Rolling && !GetCharacterMovement()->IsFalling())
+	if ((!Attacking || NextAttackReady) && !Rolling && !Stumbling && !GetCharacterMovement()->IsFalling())
 	{
 		Super::Attack();
 
@@ -262,8 +298,10 @@ void ACarbonCharacter::EndAttack()
 
 void ACarbonCharacter::Roll()
 {
-	if (Rolling)
+	if (Rolling || Stumbling)
 		return;
+
+	EndAttack();
 
 	// Rotation code based on answer from:
 	//		https://www.reddit.com/r/unrealengine/comments/3g3xem/getting_the_world_direction_of_a_players_input/ctumoe1/
@@ -343,21 +381,6 @@ void ACarbonCharacter::SetInCombat(bool _InCombat)
 	GetCharacterMovement()->MaxWalkSpeed = TargetLocked ? CombatMovementSpeed : PassiveMovementSpeed;
 	if (!TargetLocked)
 		Target = NULL;
-}
-
-void ACarbonCharacter::OnWeaponBeginOverlap(class UPrimitiveComponent* OverlappedComp, class AActor* OtherActor, class UPrimitiveComponent* OtherComp, int32 OtherBodyIndex, bool bFromSweep, const FHitResult& SweepResult)
-{
-	if (Attacking && !AttackHitActors.Contains(OtherActor))
-	{
-		float AppliedDamage = UGameplayStatics::ApplyDamage(OtherActor, 1.0f, GetController(), this, UDamageType::StaticClass());
-		if (AppliedDamage > 0.0f)
-		{
-			AttackHitActors.Add(OtherActor);
-
-			UCameraShake * CameraShake = UCameraShake::StaticClass()->GetDefaultObject<UCameraShake>();
-			GetWorld()->GetFirstPlayerController()->PlayerCameraManager->PlayCameraShake(CameraShakeMinor);
-		}
-	}
 }
 
 void ACarbonCharacter::OnSphereBeginOverlap(class UPrimitiveComponent* OverlappedComp, class AActor* OtherActor, class UPrimitiveComponent* OtherComp, int32 OtherBodyIndex, bool bFromSweep, const FHitResult& SweepResult)
@@ -456,7 +479,7 @@ float ACarbonCharacter::TakeDamage(float DamageAmount, FDamageEvent const & Dama
 	//		Play random stumble animation
 	//		Rotate towards damage source
 
-	if (DamageCauser == this || Attacking)
+	if (DamageCauser == this || Rolling)
 		return 0.0f;
 
 	EndAttack();

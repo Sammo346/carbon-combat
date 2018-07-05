@@ -28,9 +28,6 @@ void AEnemyBase::BeginPlay()
 {
 	Super::BeginPlay();
 
-	// Weapon
-	Weapon->OnComponentBeginOverlap.AddDynamic(this, &AEnemyBase::OnWeaponBeginOverlap);
-
 	ActiveState = State::IDLE;
 
 	//* Temporary NPC target solution */
@@ -137,6 +134,28 @@ void AEnemyBase::StateAttack()
 	//		Move forward if active attack needs is
 	//		More advanced implementations may make use of the 'AttackReady' bool to string attacks
 
+	// Check if weapon overlapping other actors
+	if (AttackDamaging)
+	{
+		TSet<AActor*> OverlappingActors;
+		Weapon->GetOverlappingActors(OverlappingActors);
+
+		for (AActor* OtherActor : OverlappingActors)
+		{
+			if (OtherActor == this)
+				continue;
+
+			if (!AttackHitActors.Contains(OtherActor))
+			{
+				float AppliedDamage = UGameplayStatics::ApplyDamage(OtherActor, 1.0f, GetController(), this, UDamageType::StaticClass());
+				if (AppliedDamage > 0.0f)
+				{
+					AttackHitActors.Add(OtherActor);
+				}
+			}
+		}
+	}
+
 	if (MovingForward)
 		MoveForward();
 }
@@ -182,15 +201,21 @@ float AEnemyBase::TakeDamage(float DamageAmount, FDamageEvent const & DamageEven
 	//		Play random stumble animation
 	//		Rotate towards damage source
 
-	if (DamageCauser == this || (Attacking && !Interruptable))
+	if (DamageCauser == this)
 		return 0.0f;
 
+	//* TODO: Remove health *//
+
+	// Don't stumble if not interruptable (still take damage though)
+	if (!Interruptable)
+		return DamageAmount;
+
+	// Cancel any existing states, and prepare for stumble
 	EndAttack();
 	SetMovingBackwards(false);
 	SetMovingForward(false);
 	Stumbling = true;
 	SetState(State::STUMBLE);
-
 	Cast<AAIController>(Controller)->StopMovement();
 
 	// Play random stumble animation from array - Does not repeat last animation used
@@ -253,21 +278,6 @@ void AEnemyBase::EndAttack()
 void AEnemyBase::AttackLunge()
 {
 	Super::AttackLunge();
-}
-
-void AEnemyBase::OnWeaponBeginOverlap(class UPrimitiveComponent* OverlappedComp, class AActor* OtherActor, class UPrimitiveComponent* OtherComp, int32 OtherBodyIndex, bool bFromSweep, const FHitResult& SweepResult)
-{
-	if (GEngine)
-		GEngine->AddOnScreenDebugMessage(-1, 15.0f, FColor::Yellow, FString::Printf(TEXT("Hit other: %s"), OtherActor));
-
-	if (Attacking && AttackDamaging && !AttackHitActors.Contains(OtherActor))
-	{
-		float AppliedDamage = UGameplayStatics::ApplyDamage(OtherActor, 1.0f, GetController(), this, UDamageType::StaticClass());
-		if (AppliedDamage > 0.0f)
-		{
-			AttackHitActors.Add(OtherActor);
-		}
-	}
 }
 
 

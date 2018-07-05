@@ -80,3 +80,27 @@ void AEnemyKnight::MoveForward()
 	FVector NewLocation = GetActorLocation() + (GetActorForwardVector() * LongAttackForwardSpeed * GetWorld()->GetDeltaSeconds());
 	SetActorLocation(NewLocation);
 }
+
+float AEnemyKnight::TakeDamage(float DamageAmount, struct FDamageEvent const & DamageEvent, class AController * EventInstigator, AActor * DamageCauser)
+{
+	if (DamageCauser == this)
+		return 0.0f;
+
+
+	if (QuickHitsTaken == 0 || GetWorld()->GetTimeSeconds() - QuickHitsTimestamp <= 1.0f)
+	{
+		QuickHitsTaken++;
+		QuickHitsTimestamp = GetWorld()->GetTimeSeconds();
+
+		if (QuickHitsTaken >= 4)
+			Interruptable = false;
+	}
+	else
+	{
+		QuickHitsTaken = 0;
+		Interruptable = true;
+	}
+
+
+	return Super::TakeDamage(DamageAmount, DamageEvent, EventInstigator, DamageCauser);
+}
