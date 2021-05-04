@@ -6,6 +6,7 @@
 #include "Combatant.h"
 #include "GameFramework/Character.h"
 #include "GameFramework/Actor.h"
+#include "Camera/CameraShake.h"
 #include "Components/SphereComponent.h"
 #include "CarbonCharacter.generated.h"
 
@@ -70,7 +71,7 @@ public:
 	UAnimMontage * CombatRoll;
 
 	UPROPERTY(EditAnywhere, Category = Camera)
-	TSubclassOf<UCameraShake> CameraShakeMinor;
+	TSubclassOf<UMatineeCameraShake> CameraShakeMinor;
 
 	bool Rolling;
 	FRotator RollRotation;
@@ -98,7 +99,6 @@ protected:
 	void Attack();
 
 	/** Called by Anim to signal the damaging section of an attack has ended */
-	UFUNCTION(BlueprintCallable, Category = "Combat")
 	void EndAttack();
 
 	void Roll();

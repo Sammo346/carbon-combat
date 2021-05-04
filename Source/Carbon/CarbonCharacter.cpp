@@ -179,8 +179,8 @@ void ACarbonCharacter::Tick(float DeltaTime)
 					AttackHitActors.Add(OtherActor);
 
 					// Shake camera on successful hit
-					UCameraShake * CameraShake = UCameraShake::StaticClass()->GetDefaultObject<UCameraShake>();
-					GetWorld()->GetFirstPlayerController()->PlayerCameraManager->PlayCameraShake(CameraShakeMinor);
+					UMatineeCameraShake* CameraShake = UCameraShake::StaticClass()->GetDefaultObject<UMatineeCameraShake>();
+					GetWorld()->GetFirstPlayerController()->PlayerCameraManager->StartCameraShake(CameraShakeMinor);
 				}
 			}
 		}
